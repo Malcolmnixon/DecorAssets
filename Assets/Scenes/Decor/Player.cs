@@ -7,7 +7,13 @@ public class Player : MonoBehaviour
     public float RotateSpeed = 90f;
     public float WalkSpeed = 5f;
 
+	[Header("Mouse")]
+	public float viewAngleUpper = 50.0f;
+	public float viewAngleLower = 80.0f;
+	public float lookSensitivity = 3.0f;
+
     private Rigidbody _playerBody;
+	private bool m_cursorIsLocked = true;
 
     private float _strafe;
     private float _rotate;
@@ -42,17 +48,21 @@ public class Player : MonoBehaviour
         _walk += Input.GetAxis("Vertical");
 
         // Mouse Y raises or lowers neck
-        _neck += -Input.GetAxis("Mouse Y") * 3;
+        _neck += -Input.GetAxis("Mouse Y") * lookSensitivity;
 
         // Mouse X rotates player
-        _rotate += Input.GetAxis("Mouse X") * 3;
+        _rotate += Input.GetAxis("Mouse X") * lookSensitivity;
+
+		InternalLockUpdate();
+		if (!m_cursorIsLocked) {
+			return;
+		}
 #endif
 
         // For android, detect back button to quit
 #if UNITY_ANDROID
         if (Input.GetKeyDown(KeyCode.Escape))
             Application.Quit();
-#endif
 
         // For touch devices handle two-touch move/look
         for (var i = 0; i < Input.touchCount; ++i)
@@ -96,20 +106,16 @@ public class Player : MonoBehaviour
                     break;
             }
         }
-
-        _strafe = Mathf.Clamp(_strafe, -1f, 1f);
-        _walk = Mathf.Clamp(_walk, -1f, 1f);
-        _rotate = Mathf.Clamp(_rotate, -1f, 1f);
-        _neck = Mathf.Clamp(_neck, -1f, 1f);
+#endif
     }
 
     private void FixedUpdate()
     {
-        // Rotate player using hori
-        transform.Rotate(
-            0,
-            RotateSpeed * _rotate * Time.deltaTime, 
-            0);
+        // Rotate player Left/Right
+        var rotation = new Vector3(0, RotateSpeed * _rotate * Time.deltaTime, 0) * lookSensitivity;
+        if (rotation != Vector3.zero) {
+            _playerBody.MoveRotation(_playerBody.rotation * Quaternion.Euler(rotation));
+        }
 
         _playerBody.MovePosition(
             transform.position + transform.TransformVector(
@@ -117,6 +123,51 @@ public class Player : MonoBehaviour
                 0,
                 WalkSpeed * _walk * Time.deltaTime));
 
+        // Rotate Neck Up/Down
         Camera.transform.Rotate(_neck, 0, 0);
+
+        /* Clamp Neck */
+        float cameraXRot = Camera.transform.localEulerAngles.x;
+        float clampedXRot;
+        if (cameraXRot > 180) {
+            clampedXRot = Mathf.Clamp(cameraXRot, 360-viewAngleUpper, 360);
+        } else {
+            clampedXRot = Mathf.Clamp(cameraXRot, 0, viewAngleLower);
+        }
+        Camera.transform.localEulerAngles = new Vector3(clampedXRot, 0, 0);
     }
+
+	//controls the locking and unlocking of the mouse
+	private void InternalLockUpdate()
+	{
+		if (Input.GetKeyUp(KeyCode.Escape))
+		{
+			m_cursorIsLocked = false;
+		}
+		else if (Input.GetMouseButtonUp(0))
+		{
+			m_cursorIsLocked = true;
+		}
+
+		if (m_cursorIsLocked)
+		{
+			UnlockCursor();
+		}
+		else if (!m_cursorIsLocked)
+		{
+			LockCursor();
+		}
+	}
+
+	private void UnlockCursor()
+	{
+		Cursor.lockState = CursorLockMode.Locked;
+		Cursor.visible = false;
+	}
+
+	private void LockCursor()
+	{
+		Cursor.lockState = CursorLockMode.None;
+		Cursor.visible = true;
+	}
 }
